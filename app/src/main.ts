@@ -204,7 +204,7 @@ if (ownerParam) {
  
 // ===== TIP MODE: visiting someone else's jar link =======================
 async function runTipMode(ownerStr: string): Promise<void> {
-  modeLabel.textContent = "Tip Jar · Mainnet";
+  modeLabel.textContent = "Tip Jar";
   let ownerPubkey: PublicKey;
   try {
     ownerPubkey = new PublicKey(ownerStr);
@@ -285,7 +285,7 @@ async function runTipMode(ownerStr: string): Promise<void> {
  
 // ===== MINE MODE: manage your own jar ====================================
 async function runMineMode(): Promise<void> {
-  modeLabel.textContent = "Tip Jar · Mainnet";
+  modeLabel.textContent = "Tip Jar";
   heading.textContent = "My Jar";
   statsEl.textContent = "Connect your wallet to view your jar.";
   app.innerHTML = `<button class="btn-brass btn-wide" id="connectBtn">Connect wallet</button>`;
