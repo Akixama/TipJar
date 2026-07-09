@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --format=esm --outfile=dist/main.js",
+    "build": "esbuild src/main.ts --format=esm --outfile=dist/main.js --define:HELIUS_API_KEY=\"\\\"$HELIUS_API_KEY\\\"\"",
     "watch": "esbuild src/main.ts --format=esm --outfile=dist/main.js --watch",
     "typecheck": "tsc --noEmit",
     "serve": "npx --yes serve ."
