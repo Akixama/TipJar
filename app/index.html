@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tip Jar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css" />
+
+<!-- Resolves the bare "@solana/web3.js" import in dist/main.js to the CDN build.
+     Keeping this as an import map (rather than bundling) means the CDN build's
+     own polyfills (Buffer, etc.) are used, so we don't need our own. -->
+<script type="importmap">
+{
+  "imports": {
+    "@solana/web3.js": "https://esm.sh/@solana/web3.js@1.95.3"
+  }
+}
+</script>
+</head>
+<body>
+
+  <div class="card">
+    <p class="eyebrow" id="modeLabel">Tip Jar</p>
+    <h1 id="heading">Loading&hellip;</h1>
+
+    <div class="jar-wrap">
+      <svg id="jar" viewBox="0 0 200 240">
+        <defs>
+          <clipPath id="jarClip">
+            <rect x="40" y="40" width="120" height="176" rx="20"/>
+          </clipPath>
+          <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--brass-2)"/>
+            <stop offset="100%" stop-color="var(--brass)"/>
+          </linearGradient>
+        </defs>
+        <rect x="66" y="10" width="68" height="20" rx="6" fill="var(--brass)" opacity="0.9"/>
+        <g clip-path="url(#jarClip)">
+          <rect id="fillRect" x="40" y="40" width="120" height="176" fill="url(#fillGrad)"
+                style="transform: translateY(176px);"/>
+        </g>
+        <rect x="40" y="40" width="120" height="176" rx="20" fill="none" stroke="var(--paper)" stroke-width="3" opacity="0.9"/>
+        <circle id="coin" class="coin" cx="100" cy="18" r="9" fill="var(--brass-2)" stroke="#20180a" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+    <p class="stats" id="stats">&mdash;</p>
+
+    <div id="walletBox" class="wallet-pill">Not connected</div>
+
+    <div id="app"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="./dist/main.js"></script>
+</body>
+</html>
