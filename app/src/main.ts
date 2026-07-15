@@ -241,8 +241,13 @@ async function runTipMode(ownerStr: string): Promise<void> {
   `;
  
   $<HTMLButtonElement>("#connectBtn").onclick = async () => {
-    const pk = await connectWallet();
-    if (pk) $<HTMLButtonElement>("#connectBtn").textContent = "Connected · " + short(pk);
+    try {
+      const pk = await connectWallet();
+      if (pk) $<HTMLButtonElement>("#connectBtn").textContent = "Connected · " + short(pk);
+    } catch (e) {
+      console.error(e);
+      toast("Couldn't connect — check your connection and try again.");
+    }
   };
  
   $<HTMLButtonElement>("#tipBtn").onclick = async () => {
@@ -291,11 +296,15 @@ async function runMineMode(): Promise<void> {
   app.innerHTML = `<button class="btn-brass btn-wide" id="connectBtn">Connect wallet</button>`;
  
   $<HTMLButtonElement>("#connectBtn").onclick = async () => {
-    const pk = await connectWallet();
-    if (pk) await loadMine(pk);
+    try {
+      const pk = await connectWallet();
+      if (pk) await loadMine(pk);
+    } catch (e) {
+      console.error(e);
+      toast("Couldn't load your jar — check your connection and try again.");
+    }
   };
-}
- 
+} 
 async function loadMine(ownerPubkey: PublicKey): Promise<void> {
   const { pda } = deriveJar(ownerPubkey);
   const jar = await fetchJar(pda);
