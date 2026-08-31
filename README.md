@@ -2,8 +2,8 @@
 
 A shareable, on-chain tip jar for Solana creators. Generate a link, drop it anywhere, and anyone can tip you SOL directly — no middleman, no custodial wallet, funds sit in a PDA only you can withdraw from.
 
-**Live:** [add deployed link]
-**Demo:** [add 60s walkthrough video]
+**Live:** https://x.com/Anjolaoluw_a/status/2076020582395879869?s=20
+**Demo:** https://x.com/Anjolaoluw_a/status/2076347839848862196?s=20
 **Program (mainnet):** [`37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A`](https://solscan.io/account/37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A)
 
 ---
