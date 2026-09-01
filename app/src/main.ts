@@ -21,8 +21,9 @@ declare global {
  
 const PROGRAM_ID = new PublicKey("37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A");
 declare const HELIUS_API_KEY: string;
+const heliusApiKey = typeof HELIUS_API_KEY === "string" ? HELIUS_API_KEY : "";
 const connection = new Connection(
-  `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`,
+  `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}`,
   "confirmed"
 );
 
@@ -46,7 +47,8 @@ const $ = <T extends Element>(sel: string): T => document.querySelector(sel) as 
 const app = $<HTMLDivElement>("#app");
 const heading = $<HTMLHeadingElement>("#heading");
 const modeLabel = $<HTMLParagraphElement>("#modeLabel");
-const statsEl = $<HTMLParagraphElement>("#stats");
+const lede = $<HTMLParagraphElement>("#lede");
+const statsEl = $<HTMLDivElement>("#stats");
 const walletBox = $<HTMLDivElement>("#walletBox");
 const fillRect = $<SVGRectElement>("#fillRect");
 const coin = $<SVGCircleElement>("#coin");
@@ -112,7 +114,13 @@ function deriveJar(ownerPubkey: PublicKey): { pda: PublicKey; bump: number } {
 }
  
 async function fetchJar(pda: PublicKey): Promise<JarAccount | null> {
-  const info = await connection.getAccountInfo(pda);
+  let info;
+  try {
+    info = await connection.getAccountInfo(pda);
+  } catch (error) {
+    console.error("Could not load jar account:", error);
+    return null;
+  }
   if (!info) {
     return null;
   }
@@ -152,7 +160,23 @@ function setFill(lamports: bigint): void {
   const sol = Number(lamports) / LAMPORTS_PER_SOL;
   const cap = Math.max(2, sol * 1.25); // soft visual scale, keeps headroom
   const pct = Math.max(0, Math.min(1, sol / cap));
-  fillRect.style.transform = `translateY(${(1 - pct) * 176}px)`;
+  fillRect.style.transform = `translateY(${(1 - pct) * 198}px)`;
+}
+
+function renderStats(jar: JarAccount | null): void {
+  if (!jar) {
+    statsEl.innerHTML = `
+      <div class="stat"><span class="stat-label">Jar balance</span><strong>0.000 SOL</strong></div>
+      <div class="stat"><span class="stat-label">Community</span><strong>0 tips</strong></div>
+    `;
+    return;
+  }
+
+  const balance = (Number(jar.lamports) / LAMPORTS_PER_SOL).toFixed(3);
+  statsEl.innerHTML = `
+    <div class="stat"><span class="stat-label">Jar balance</span><strong class="accent">${balance} SOL</strong></div>
+    <div class="stat"><span class="stat-label">Community</span><strong>${jar.tipCount} tip${jar.tipCount === 1n ? "" : "s"}</strong></div>
+  `;
 }
  
 function dropCoin(): void {
@@ -172,7 +196,8 @@ async function connectWallet(): Promise<PublicKey | null> {
   }
   const resp = await provider.connect();
   connectedPubkey = resp.publicKey;
-  walletBox.textContent = "Connected · " + short(connectedPubkey);
+  walletBox.classList.add("connected");
+  walletBox.innerHTML = `<span></span>${short(connectedPubkey)}`;
   return connectedPubkey;
 }
  
@@ -204,46 +229,74 @@ if (ownerParam) {
  
 // ===== TIP MODE: visiting someone else's jar link =======================
 async function runTipMode(ownerStr: string): Promise<void> {
-  modeLabel.textContent = "Tip Jar";
+  modeLabel.textContent = "Support a creator";
   let ownerPubkey: PublicKey;
   try {
     ownerPubkey = new PublicKey(ownerStr);
   } catch {
     heading.textContent = "Invalid jar link";
+    lede.textContent = "This link does not contain a valid Solana wallet address.";
+    app.innerHTML = `<div class="muted">Ask the creator for a fresh TipJar link.</div>`;
     return;
   }
  
-  heading.innerHTML = `Tip <span class="addr">${short(ownerPubkey)}</span>`;
+  heading.innerHTML = `Send a little<br><span>something good.</span>`;
+  lede.innerHTML = `A direct, on-chain thank you for <span class="addr">${short(ownerPubkey)}</span>. No middleman, no platform cut.`;
   const { pda } = deriveJar(ownerPubkey);
  
   async function refresh(): Promise<JarAccount | null> {
     const jar = await fetchJar(pda);
     if (!jar) {
-      statsEl.textContent = "This creator hasn't set up their jar yet.";
+      renderStats(null);
       setFill(0n);
       return null;
     }
-    statsEl.innerHTML = `<b>${(Number(jar.lamports) / LAMPORTS_PER_SOL).toFixed(3)} SOL</b> in the jar · ${jar.tipCount} tip${jar.tipCount === 1n ? "" : "s"}`;
+    renderStats(jar);
     setFill(jar.lamports);
     return jar;
   }
   await refresh();
  
   app.innerHTML = `
-    <button class="btn-ghost btn-wide" id="connectBtn" style="margin-bottom:12px;">Connect wallet</button>
-    <div class="panel">
-      <label for="amt">Tip amount (SOL)</label>
-      <div class="row">
-        <input type="number" id="amt" min="0.001" step="0.001" value="0.05" />
-        <button class="btn-brass" id="tipBtn">Send tip</button>
+    <div class="form-heading">
+      <h2>Leave a tip</h2>
+      <p>Choose an amount, connect Phantom, and approve the transaction.</p>
+    </div>
+    <button class="btn-ghost btn-wide" id="connectBtn">Connect Phantom</button>
+    <div class="panel" style="margin-top:14px;">
+      <label for="amt">Choose an amount</label>
+      <div class="amount-presets">
+        <button type="button" class="preset-btn" data-amount="0.01">0.01 SOL</button>
+        <button type="button" class="preset-btn selected" data-amount="0.05">0.05 SOL</button>
+        <button type="button" class="preset-btn" data-amount="0.1">0.10 SOL</button>
       </div>
+      <div class="amount-field">
+        <input type="number" id="amt" aria-label="Custom tip amount in SOL" min="0.001" step="0.001" value="0.05" />
+        <span class="amount-unit">SOL</span>
+      </div>
+      <button class="btn-brass btn-wide primary-action" id="tipBtn">Send tip</button>
+      <p class="fine-print">You’ll review the exact amount in Phantom before anything is sent.</p>
     </div>
   `;
+
+  const amountInput = $<HTMLInputElement>("#amt");
+  const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".preset-btn"));
+  for (const preset of presetButtons) {
+    preset.onclick = () => {
+      amountInput.value = preset.dataset.amount ?? "0.05";
+      for (const button of presetButtons) button.classList.toggle("selected", button === preset);
+    };
+  }
+  amountInput.oninput = () => {
+    for (const button of presetButtons) {
+      button.classList.toggle("selected", button.dataset.amount === amountInput.value);
+    }
+  };
  
   $<HTMLButtonElement>("#connectBtn").onclick = async () => {
     try {
       const pk = await connectWallet();
-      if (pk) $<HTMLButtonElement>("#connectBtn").textContent = "Connected · " + short(pk);
+      if (pk) $<HTMLButtonElement>("#connectBtn").textContent = "Wallet connected · " + short(pk);
     } catch (e) {
       console.error(e);
       toast("Couldn't connect — check your connection and try again.");
@@ -290,10 +343,18 @@ async function runTipMode(ownerStr: string): Promise<void> {
  
 // ===== MINE MODE: manage your own jar ====================================
 async function runMineMode(): Promise<void> {
-  modeLabel.textContent = "Tip Jar";
-  heading.textContent = "My Jar";
-  statsEl.textContent = "Connect your wallet to view your jar.";
-  app.innerHTML = `<button class="btn-brass btn-wide" id="connectBtn">Connect wallet</button>`;
+  modeLabel.textContent = "Your creator page";
+  heading.innerHTML = `Turn appreciation<br><span>into momentum.</span>`;
+  lede.textContent = "Create your on-chain jar, share one link, and receive SOL directly from the people who value your work.";
+  renderStats(null);
+  app.innerHTML = `
+    <div class="form-heading">
+      <h2>Open your jar</h2>
+      <p>Connect Phantom to create a jar or manage one you already own.</p>
+    </div>
+    <button class="btn-brass btn-wide primary-action" id="connectBtn">Connect Phantom</button>
+    <p class="fine-print">Free to use. You only pay Solana network fees.</p>
+  `;
  
   $<HTMLButtonElement>("#connectBtn").onclick = async () => {
     try {
@@ -311,9 +372,16 @@ async function loadMine(ownerPubkey: PublicKey): Promise<void> {
   const shareLink = `${location.origin}${location.pathname}?owner=${ownerPubkey.toBase58()}`;
  
   if (!jar) {
-    statsEl.textContent = "You don't have a jar yet.";
+    renderStats(null);
     setFill(0n);
-    app.innerHTML = `<button class="btn-brass btn-wide" id="createBtn">Create my jar</button>`;
+    app.innerHTML = `
+      <div class="form-heading">
+        <h2>Your jar is ready to begin</h2>
+        <p>One small on-chain transaction creates a permanent jar tied to your wallet.</p>
+      </div>
+      <button class="btn-brass btn-wide primary-action" id="createBtn">Create my TipJar</button>
+      <p class="fine-print">Your wallet remains the only authority that can withdraw.</p>
+    `;
     $<HTMLButtonElement>("#createBtn").onclick = async () => {
       const ix = new TransactionInstruction({
         programId: PROGRAM_ID,
@@ -339,23 +407,29 @@ async function loadMine(ownerPubkey: PublicKey): Promise<void> {
     return;
   }
  
-  statsEl.innerHTML = `<b>${(Number(jar.lamports) / LAMPORTS_PER_SOL).toFixed(3)} SOL</b> in the jar · ${jar.tipCount} tip${jar.tipCount === 1n ? "" : "s"}`;
+  renderStats(jar);
   setFill(jar.lamports);
- 
+
   app.innerHTML = `
-    <div class="panel" style="margin-bottom:14px;">
+    <div class="form-heading">
+      <h2>Your jar is live</h2>
+      <p>Share your personal link or withdraw from your available balance.</p>
+    </div>
+    <div class="panel">
       <label>Your tip link</label>
-      <div class="row">
-        <input type="text" id="link" readonly value="${shareLink}" style="font-size:12px;" />
-        <button class="btn-ghost" id="copyBtn" style="white-space:nowrap;">Copy</button>
+      <div class="copy-field">
+        <input type="text" id="link" readonly value="${shareLink}" />
+        <button class="btn-ghost" id="copyBtn">Copy</button>
       </div>
     </div>
     <div class="panel">
-      <label for="wAmt">Withdraw (SOL)</label>
-      <div class="row">
+      <label for="wAmt">Withdraw funds</label>
+      <div class="amount-field">
         <input type="number" id="wAmt" min="0.001" step="0.001" value="0.01" />
-        <button class="btn-brass" id="withdrawBtn">Withdraw</button>
+        <span class="amount-unit">SOL</span>
       </div>
+      <button class="btn-brass btn-wide primary-action" id="withdrawBtn">Withdraw to wallet</button>
+      <p class="fine-print">The rent-exempt minimum stays in the jar so it remains active.</p>
     </div>
   `;
  
