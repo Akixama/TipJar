@@ -5,7 +5,7 @@
   "buildCommand": "npm --prefix app run build",
   "outputDirectory": "app/dist",
   "functions": {
-    "api/rpc.ts": {
+    "api/rpc.mjs": {
       "maxDuration": 10
     }
   },

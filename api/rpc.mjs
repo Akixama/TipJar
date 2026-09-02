@@ -9,12 +9,12 @@ const JSON_HEADERS = {
   "Cache-Control": "no-store",
 };
 
-function jsonError(message: string, status: number): Response {
+function jsonError(message, status) {
   return Response.json({ error: message }, { status, headers: JSON_HEADERS });
 }
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request) {
     if (request.method !== "POST") {
       return jsonError("Method not allowed", 405);
     }
@@ -30,7 +30,7 @@ export default {
       return jsonError("Request body is too large", 413);
     }
 
-    let payload: unknown;
+    let payload;
     try {
       payload = await request.json();
     } catch {
@@ -41,7 +41,6 @@ export default {
       !payload ||
       typeof payload !== "object" ||
       Array.isArray(payload) ||
-      !("method" in payload) ||
       typeof payload.method !== "string" ||
       !ALLOWED_METHODS.has(payload.method)
     ) {
