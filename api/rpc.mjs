@@ -2,6 +2,7 @@ const ALLOWED_METHODS = new Set([
   "getAccountInfo",
   "getLatestBlockhash",
   "getSignatureStatuses",
+  "simulateTransaction",
 ]);
 
 const JSON_HEADERS = {

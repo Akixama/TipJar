@@ -202,6 +202,16 @@ async function sendIx(ix: TransactionInstruction, feePayer: PublicKey): Promise<
   tx.feePayer = feePayer;
   const { blockhash } = await connection.getLatestBlockhash();
   tx.recentBlockhash = blockhash;
+
+  // Catch transactions that Phantom cannot simulate before asking the user to
+  // approve them. Phantom treats failed or indeterminate simulations as unsafe.
+  const simulation = await connection.simulateTransaction(tx);
+  if (simulation.value.err) {
+    console.error("Transaction simulation failed:", simulation.value.err, simulation.value.logs);
+    const detail = JSON.stringify(simulation.value.err);
+    throw new Error(`Transaction simulation failed: ${detail}`);
+  }
+
   const { signature } = await provider.signAndSendTransaction(tx);
   toast("Confirming transaction…", 15000);
   await connection.confirmTransaction(signature, "confirmed");
