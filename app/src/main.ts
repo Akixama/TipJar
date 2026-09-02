@@ -158,6 +158,17 @@ function setFill(lamports: bigint): void {
   fillRect.style.transform = `translateY(${(1 - pct) * 198}px)`;
 }
 
+function transactionErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/insufficient (funds|lamports)/i.test(message)) {
+    return "Your wallet needs more SOL for the transaction and network fee.";
+  }
+  if (/transaction simulation failed/i.test(message)) {
+    return "The transaction failed Solana's safety check, so it was not sent to Phantom.";
+  }
+  return fallback;
+}
+
 function renderStats(jar: JarAccount | null): void {
   if (!jar) {
     statsEl.innerHTML = `
@@ -209,7 +220,8 @@ async function sendIx(ix: TransactionInstruction, feePayer: PublicKey): Promise<
   if (simulation.value.err) {
     console.error("Transaction simulation failed:", simulation.value.err, simulation.value.logs);
     const detail = JSON.stringify(simulation.value.err);
-    throw new Error(`Transaction simulation failed: ${detail}`);
+    const logs = simulation.value.logs?.join(" ") ?? "";
+    throw new Error(`Transaction simulation failed: ${detail} ${logs}`);
   }
 
   const { signature } = await provider.signAndSendTransaction(tx);
@@ -339,7 +351,7 @@ async function runTipMode(ownerStr: string): Promise<void> {
       await refresh();
     } catch (e) {
       console.error(e);
-      toast("Transaction failed — see console for details.");
+      toast(transactionErrorMessage(e, "Transaction failed — please try again."));
     } finally {
       btn.disabled = false;
     }
@@ -405,7 +417,7 @@ async function loadMine(ownerPubkey: PublicKey): Promise<void> {
         await loadMine(ownerPubkey);
       } catch (e) {
         console.error(e);
-        toast("Couldn't create your jar — see console.");
+        toast(transactionErrorMessage(e, "Couldn't create your jar — please try again."));
         btn.disabled = false;
       }
     };
@@ -468,7 +480,7 @@ async function loadMine(ownerPubkey: PublicKey): Promise<void> {
       await loadMine(ownerPubkey);
     } catch (e) {
       console.error(e);
-      toast("Withdraw failed — check the amount doesn't dip below the rent-exempt minimum.");
+      toast(transactionErrorMessage(e, "Withdraw failed — check the amount doesn't dip below the rent-exempt minimum."));
     } finally {
       btn.disabled = false;
     }
