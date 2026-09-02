@@ -20,12 +20,7 @@ declare global {
 }
  
 const PROGRAM_ID = new PublicKey("37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A");
-declare const HELIUS_API_KEY: string;
-const heliusApiKey = typeof HELIUS_API_KEY === "string" ? HELIUS_API_KEY : "";
-const connection = new Connection(
-  `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}`,
-  "confirmed"
-);
+const connection = new Connection(`${location.origin}/api/rpc`, "confirmed");
 
  
 // sha256("global:<ix_name>")[0..8] / sha256("account:DataAccount")[0..8]

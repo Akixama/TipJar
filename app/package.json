@@ -5,9 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --format=esm --outfile=dist/main.js --define:HELIUS_API_KEY=\"\\\"$HELIUS_API_KEY\\\"\"",
+    "build": "node node_modules/typescript/bin/tsc --noEmit false --rootDir src --outDir dist && node scripts/copy-static.mjs",
     "watch": "esbuild src/main.ts --format=esm --outfile=dist/main.js --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "serve": "npx --yes serve ."
   },
   "keywords": [],
