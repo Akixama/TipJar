@@ -23,13 +23,21 @@ The frontend talks to the program with **hand-built instruction discriminators**
 
 ## Program design
 
-Three instructions, one account type:
+The live mainnet deployment currently exposes the original three jar
+instructions. This branch preserves them and adds the spending-vault
+instructions that will be enabled only after devnet testing:
 
 | Instruction | Who can call | What it does |
 |---|---|---|
 | `initialize` | Anyone (for their own jar) | Creates the PDA, sets owner, zeroes counters |
 | `tip` | Anyone | Transfers SOL into the jar, increments `total_tipped` and `tip_count` |
 | `withdraw` | Jar owner only | Pulls SOL out, enforced to never dip below rent-exempt minimum |
+| `initialize_spending_vault` | Vault owner only | Creates an outgoing tip budget and its delegated policy |
+| `update_spending_policy` | Vault owner only | Changes the delegate, limits, expiry or pause state |
+| `deposit_to_spending_vault` | Vault owner only | Adds SOL to the outgoing tip budget |
+| `withdraw_from_spending_vault` | Vault owner only | Returns available vault SOL to its owner |
+| `revoke_spending_delegate` | Vault owner only | Immediately disables automated tipping |
+| `delegate_tip` | Configured delegate only | Sends a policy-compliant X tip to a registered jar |
 
 ```rust
 pub struct DataAccount {
@@ -41,6 +49,12 @@ pub struct DataAccount {
 ```
 
 Guardrails already in place: checked arithmetic on both counters (no silent overflow), a zero-amount guard on tips and withdrawals, and an owner constraint on withdraw enforced at the account level, not just in application logic.
+
+The new `SpendingVault` keeps its owner and delegate separate, enforces per-tip
+and rolling daily limits, expires authorization, supports immediate revocation,
+and rejects replayed or out-of-order X post IDs. Its SOL can be withdrawn only
+to the owner wallet. The existing `DataAccount` byte layout remains unchanged
+for mainnet compatibility.
 
 ## Tech stack
 
@@ -72,6 +86,11 @@ npm run dev
 - [ ] Tip messages / notes attached to a transaction
 - [ ] Leaderboard of top tippers per jar
 - [ ] Devnet deployment + toggle for testing without real SOL
+- [ ] Non-custodial X tipping through owner-funded spending vaults
+- [ ] Expiring pending-tip escrow for recipients who have not registered
+
+The staged design and security invariants for X tipping are documented in
+[`docs/x-tipping.md`](docs/x-tipping.md).
 
 ## License
 
