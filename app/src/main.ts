@@ -160,6 +160,9 @@ function setFill(lamports: bigint): void {
 
 function transactionErrorMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : String(error);
+  if (/AccountNotFound/i.test(message)) {
+    return "This wallet has no SOL on mainnet. Add at least 0.002 SOL, then try again.";
+  }
   if (/insufficient (funds|lamports)/i.test(message)) {
     return "Your wallet needs more SOL for the transaction and network fee.";
   }
