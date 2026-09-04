@@ -32,6 +32,7 @@ const connection = new Connection(`${location.origin}/api/rpc`, "confirmed");
 const DEVNET_PROGRAM_ID = new PublicKey(
   "CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P"
 );
+const U64_MAX = (1n << 64n) - 1n;
 const devnetConnection = new Connection(
   `${location.origin}/api/rpc?cluster=devnet`,
   "confirmed"
@@ -842,6 +843,7 @@ function newVaultPanel(linked: boolean): string {
         <div><label for="maxTip">Maximum per tip</label><div class="amount-field"><input id="maxTip" type="number" min="0.001" step="0.001" value="0.05"><span class="amount-unit">SOL</span></div></div>
         <div><label for="dailyLimit">Maximum per 24h</label><div class="amount-field"><input id="dailyLimit" type="number" min="0.001" step="0.001" value="0.20"><span class="amount-unit">SOL</span></div></div>
       </div>
+      ${unlimitedPolicyControl(false)}
       <label for="initialDeposit">Initial test budget</label>
       <div class="amount-field"><input id="initialDeposit" type="number" min="0.001" step="0.001" value="0.20"><span class="amount-unit">SOL</span></div>
       <button class="btn-brass btn-wide primary-action" id="createVaultBtn" ${
@@ -855,6 +857,7 @@ function newVaultPanel(linked: boolean): string {
 
 function existingVaultPanel(vault: SpendingVaultAccount): string {
   const isRevoked = vault.delegate.equals(PublicKey.default);
+  const isUnlimited = isUnlimitedPolicy(vault);
   const status = isRevoked ? "Revoked" : vault.paused ? "Paused" : "Active";
   const expires = new Date(
     Number(vault.authorizationExpiresAt) * 1000
@@ -870,15 +873,14 @@ function existingVaultPanel(vault: SpendingVaultAccount): string {
     <div class="panel vault-form">
       <label>Spending limits</label>
       <div class="field-grid">
-        <div><label for="maxTip">Per tip</label><div class="amount-field"><input id="maxTip" type="number" min="0.001" step="0.001" value="${solValue(
-          vault.maxTipLamports,
-          4
-        )}"><span class="amount-unit">SOL</span></div></div>
-        <div><label for="dailyLimit">Per 24h</label><div class="amount-field"><input id="dailyLimit" type="number" min="0.001" step="0.001" value="${solValue(
-          vault.dailyLimitLamports,
-          4
-        )}"><span class="amount-unit">SOL</span></div></div>
+        <div><label for="maxTip">Per tip</label><div class="amount-field"><input id="maxTip" type="number" min="0.001" step="0.001" value="${
+          isUnlimited ? "0.05" : solValue(vault.maxTipLamports, 4)
+        }"><span class="amount-unit">SOL</span></div></div>
+        <div><label for="dailyLimit">Per 24h</label><div class="amount-field"><input id="dailyLimit" type="number" min="0.001" step="0.001" value="${
+          isUnlimited ? "0.20" : solValue(vault.dailyLimitLamports, 4)
+        }"><span class="amount-unit">SOL</span></div></div>
       </div>
+      ${unlimitedPolicyControl(isUnlimited)}
       <button class="btn-ghost btn-wide" id="savePolicyBtn">Save limits · renew 30 days</button>
     </div>
     <div class="panel vault-form">
@@ -894,9 +896,57 @@ function existingVaultPanel(vault: SpendingVaultAccount): string {
         isRevoked ? "disabled" : ""
       }>Revoke bot</button>
     </div>
-    <p class="fine-print">Only this wallet can change policy or withdraw. The bot can only tip within these limits.</p>
+    <p class="fine-print">Only this wallet can change policy or withdraw. The bot can never access your main wallet.</p>
     <a class="quiet-link" href="/">Back to my TipJar</a>
   `;
+}
+
+function isUnlimitedPolicy(vault: SpendingVaultAccount): boolean {
+  return (
+    vault.maxTipLamports === U64_MAX && vault.dailyLimitLamports === U64_MAX
+  );
+}
+
+function unlimitedPolicyControl(checked: boolean): string {
+  return `
+    <label class="policy-choice" for="unlimitedPolicy">
+      <input id="unlimitedPolicy" type="checkbox" ${checked ? "checked" : ""}>
+      <span class="policy-checkbox" aria-hidden="true"></span>
+      <span class="policy-copy"><strong>Unlimited within vault balance</strong><span>Remove the per-tip and daily caps. The 30-day authorization still applies.</span></span>
+    </label>
+    <div class="risk-note ${
+      checked ? "active" : ""
+    }" id="unlimitedRisk" role="status">
+      <strong>Higher risk</strong>
+      <span>If your X account is compromised, the bot could tip the entire balance held in this vault. Your main wallet remains inaccessible.</span>
+    </div>
+  `;
+}
+
+function wireUnlimitedPolicy(): void {
+  const toggle = $<HTMLInputElement>("#unlimitedPolicy");
+  const maxTip = $<HTMLInputElement>("#maxTip");
+  const dailyLimit = $<HTMLInputElement>("#dailyLimit");
+  const risk = $<HTMLDivElement>("#unlimitedRisk");
+  const sync = () => {
+    maxTip.disabled = toggle.checked;
+    dailyLimit.disabled = toggle.checked;
+    risk.classList.toggle("active", toggle.checked);
+  };
+  toggle.addEventListener("change", sync);
+  sync();
+}
+
+function selectedVaultPolicy(): { maxTip: bigint; dailyLimit: bigint } {
+  if ($<HTMLInputElement>("#unlimitedPolicy").checked) {
+    return { maxTip: U64_MAX, dailyLimit: U64_MAX };
+  }
+  const maxTip = inputLamports("maxTip");
+  const dailyLimit = inputLamports("dailyLimit");
+  if (dailyLimit < maxTip) {
+    throw new Error("The 24-hour limit must be at least the per-tip limit.");
+  }
+  return { maxTip, dailyLimit };
 }
 
 function wireXIdentityAction(owner: PublicKey, link: WalletLinkStatus): void {
@@ -950,17 +1000,13 @@ function wireNewVaultAction(
   delegate: PublicKey,
   linked: boolean
 ): void {
+  wireUnlimitedPolicy();
   if (!linked) return;
   $<HTMLButtonElement>("#createVaultBtn").onclick = async () => {
     const button = $<HTMLButtonElement>("#createVaultBtn");
     try {
-      const maxTip = inputLamports("maxTip");
-      const dailyLimit = inputLamports("dailyLimit");
+      const { maxTip, dailyLimit } = selectedVaultPolicy();
       const deposit = inputLamports("initialDeposit");
-      if (dailyLimit < maxTip)
-        throw new Error(
-          "The 24-hour limit must be at least the per-tip limit."
-        );
       const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 30 * 86_400);
       const vault = deriveSpendingVault(owner);
       const initialize = new TransactionInstruction({
@@ -1039,11 +1085,9 @@ function wireExistingVaultActions(
   vault: SpendingVaultAccount,
   delegate: PublicKey
 ): void {
+  wireUnlimitedPolicy();
   const savePolicy = async (paused: boolean) => {
-    const maxTip = inputLamports("maxTip");
-    const dailyLimit = inputLamports("dailyLimit");
-    if (dailyLimit < maxTip)
-      throw new Error("The 24-hour limit must be at least the per-tip limit.");
+    const { maxTip, dailyLimit } = selectedVaultPolicy();
     const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 30 * 86_400);
     const ix = manageVaultInstruction(
       owner,
