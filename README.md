@@ -38,6 +38,9 @@ instructions that will be enabled only after devnet testing:
 | `withdraw_from_spending_vault` | Vault owner only | Returns available vault SOL to its owner |
 | `revoke_spending_delegate` | Vault owner only | Immediately disables automated tipping |
 | `delegate_tip` | Configured delegate only | Sends a policy-compliant X tip to a registered jar |
+| `create_pending_tip` | Configured delegate only | Escrows a policy-compliant tip for an unregistered X user |
+| `claim_pending_tip` | Recipient + claim authority | Sends a verified recipient's pending tip into their jar |
+| `refund_pending_tip` | Original sender only | Recovers a pending tip after it expires |
 
 ```rust
 pub struct DataAccount {
@@ -53,8 +56,10 @@ Guardrails already in place: checked arithmetic on both counters (no silent over
 The new `SpendingVault` keeps its owner and delegate separate, enforces per-tip
 and rolling daily limits, expires authorization, supports immediate revocation,
 and rejects replayed or out-of-order X post IDs. Its SOL can be withdrawn only
-to the owner wallet. The existing `DataAccount` byte layout remains unchanged
-for mainnet compatibility.
+to the owner wallet. Pending tips use one escrow PDA per X post, require both
+the recipient wallet and the X-verification authority to claim, expire after at
+most 30 days, and can then be refunded only to the original sender. The
+existing `DataAccount` byte layout remains unchanged for mainnet compatibility.
 
 ## Tech stack
 
@@ -89,8 +94,10 @@ npm run dev
 - [ ] Tip messages / notes attached to a transaction
 - [ ] Leaderboard of top tippers per jar
 - [ ] Devnet deployment + toggle for testing without real SOL
-- [ ] Non-custodial X tipping through owner-funded spending vaults
-- [ ] Expiring pending-tip escrow for recipients who have not registered
+- [x] Non-custodial X tipping program through owner-funded spending vaults
+- [x] Expiring pending-tip escrow program for recipients who have not registered
+- [ ] X OAuth account linking and command-processing backend
+- [ ] Spending-vault and pending-tip frontend controls
 
 The staged design and security invariants for X tipping are documented in
 [`docs/x-tipping.md`](docs/x-tipping.md).

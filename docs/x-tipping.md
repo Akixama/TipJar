@@ -10,7 +10,7 @@ independent security review.
 | --- | --- | --- | --- |
 | Creator jar | `["jar", creator_wallet]` | Holds tips a creator has received | Creator wallet only |
 | Spending vault | `["spending_vault", owner_wallet]` | Holds SOL budgeted for automatic X tips | Owner can withdraw; configured delegate can only tip registered jars |
-| Pending tip (phase 2) | Separate PDA per pending X tip | Holds a tip for an unregistered recipient until claim or expiry | Verified recipient can claim; sender can recover after expiry |
+| Pending tip | `["pending_tip", spending_vault, x_post_id]` | Holds a tip for an unregistered recipient until claim or expiry | Verified recipient can claim; sender can recover after expiry |
 
 Received earnings and the owner's outgoing tip budget remain separate. A bot
 cannot invoke either jar withdrawal or spending-vault withdrawal because both
@@ -50,14 +50,29 @@ and no SOL leaves the sender's vault.
 
 ## Phase 2: pending tips
 
-Pending tips should be introduced only after the registered-recipient flow is
-stable. Each pending tip must use a separate escrow PDA and include the sender,
-recipient's immutable X user ID commitment, amount, X post ID, creation time,
-and expiry. Claiming requires a wallet ownership signature plus verified X
-account linkage. After expiry, only the sender can recover the funds.
+The program now includes the pending-tip foundation for recipients who have not
+registered. The backend calls `create_pending_tip` instead of `delegate_tip`.
+This applies the same delegate, authorization, per-tip, daily-limit and replay
+checks before moving the amount into a separate escrow PDA.
 
-Claim and refund must close the escrow PDA so its rent is reclaimed, and the two
-paths must be mutually exclusive.
+Each pending tip records the sender, originating vault, immutable numeric X
+recipient ID, X post ID, amount, creation time, expiry, claim authority and
+rent-refund address. Its lifetime must be greater than zero and no longer than
+30 days; the backend should use seven days by default.
+
+Claiming requires two signatures:
+
+- the recipient wallet, which must own the destination TipJar jar; and
+- the stored TipOnSol claim authority, which attests that OAuth verification
+  linked that wallet to the escrow's numeric X user ID.
+
+Solana cannot independently read X identity data. The claim authority is
+therefore the trusted bridge for that one identity assertion; it has no
+instruction that can withdraw a pending tip to itself. The sender alone can
+refund the amount after expiry. Both claim and refund close the escrow, making
+the paths mutually exclusive, and return the temporary account rent to the
+delegate that funded it. Refunded tips still count toward the original rolling
+daily limit because they consumed authorization when created.
 
 ## Rollout
 
@@ -65,7 +80,7 @@ paths must be mutually exclusive.
 2. Deploy the expanded program to devnet.
 3. Exercise registered tips, limits, expiry, replay rejection, revocation and
    withdrawals.
-4. Add and test pending-tip claim/refund behavior.
+4. Exercise pending-tip creation, claims, expiry and refunds on devnet.
 5. Complete an independent security review.
 6. Confirm control of the current program upgrade authority.
 7. Upgrade the existing mainnet program and then enable the matching backend

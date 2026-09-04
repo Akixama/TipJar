@@ -4,6 +4,7 @@ use anchor_lang::system_program::{self, Transfer};
 declare_id!("37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A");
 
 const DAY_SECONDS: i64 = 86_400;
+const MAX_PENDING_TIP_LIFETIME_SECONDS: i64 = 30 * DAY_SECONDS;
 
 #[program]
 pub mod tip_jar {
@@ -225,6 +226,121 @@ pub mod tip_jar {
 
         Ok(())
     }
+
+    /// Locks a policy-compliant tip for an X recipient who has not registered yet.
+    pub fn create_pending_tip(
+        ctx: Context<CreatePendingTip>,
+        x_post_id: u64,
+        recipient_x_user_id: u64,
+        amount: u64,
+        expires_at: i64,
+    ) -> Result<()> {
+        require!(x_post_id > 0, TipJarError::InvalidPostId);
+        require!(recipient_x_user_id > 0, TipJarError::InvalidXUserId);
+        require!(amount > 0, TipJarError::InvalidAmount);
+
+        let now = Clock::get()?.unix_timestamp;
+        validate_pending_tip_expiration(expires_at, now)?;
+
+        let vault = &mut ctx.accounts.spending_vault;
+        require_keys_eq!(
+            vault.delegate,
+            ctx.accounts.delegate.key(),
+            TipJarError::UnauthorizedDelegate
+        );
+        authorize_spend(vault, x_post_id, amount, now)?;
+
+        transfer_program_lamports(
+            &vault.to_account_info(),
+            &ctx.accounts.pending_tip.to_account_info(),
+            amount,
+        )?;
+
+        let pending_tip = &mut ctx.accounts.pending_tip;
+        pending_tip.sender = vault.owner;
+        pending_tip.spending_vault = vault.key();
+        pending_tip.claim_authority = ctx.accounts.delegate.key();
+        pending_tip.rent_refund = ctx.accounts.delegate.key();
+        pending_tip.recipient_x_user_id = recipient_x_user_id;
+        pending_tip.x_post_id = x_post_id;
+        pending_tip.amount = amount;
+        pending_tip.created_at = now;
+        pending_tip.expires_at = expires_at;
+        pending_tip.bump = ctx.bumps.pending_tip;
+
+        emit!(PendingTipCreated {
+            pending_tip: pending_tip.key(),
+            vault: vault.key(),
+            sender: vault.owner,
+            recipient_x_user_id,
+            x_post_id,
+            amount,
+            created_at: now,
+            expires_at,
+        });
+
+        Ok(())
+    }
+
+    /// Claims a pending tip after the backend verifies that the recipient wallet
+    /// controls the X account recorded on the escrow.
+    pub fn claim_pending_tip(ctx: Context<ClaimPendingTip>, x_post_id: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let pending_tip = &ctx.accounts.pending_tip;
+        require!(now < pending_tip.expires_at, TipJarError::PendingTipExpired);
+
+        let amount = pending_tip.amount;
+        let recipient_x_user_id = pending_tip.recipient_x_user_id;
+        let pending_tip_key = pending_tip.key();
+
+        transfer_program_lamports(
+            &pending_tip.to_account_info(),
+            &ctx.accounts.recipient_jar.to_account_info(),
+            amount,
+        )?;
+        record_received_tip(&mut ctx.accounts.recipient_jar, amount)?;
+
+        emit!(PendingTipClaimed {
+            pending_tip: pending_tip_key,
+            recipient: ctx.accounts.recipient.key(),
+            recipient_jar: ctx.accounts.recipient_jar.key(),
+            recipient_x_user_id,
+            x_post_id,
+            amount,
+            claimed_at: now,
+        });
+
+        Ok(())
+    }
+
+    /// Returns an expired pending tip to its sender. The delegate-funded rent is
+    /// returned separately by Anchor's account-close handling.
+    pub fn refund_pending_tip(ctx: Context<RefundPendingTip>, x_post_id: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let pending_tip = &ctx.accounts.pending_tip;
+        require!(
+            now >= pending_tip.expires_at,
+            TipJarError::PendingTipNotExpired
+        );
+
+        let amount = pending_tip.amount;
+        let pending_tip_key = pending_tip.key();
+        transfer_program_lamports(
+            &pending_tip.to_account_info(),
+            &ctx.accounts.sender.to_account_info(),
+            amount,
+        )?;
+
+        emit!(PendingTipRefunded {
+            pending_tip: pending_tip_key,
+            sender: ctx.accounts.sender.key(),
+            x_post_id,
+            amount,
+            refunded_at: now,
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -340,6 +456,88 @@ pub struct DelegateTip<'info> {
     pub recipient_jar: Account<'info, DataAccount>,
 }
 
+#[derive(Accounts)]
+#[instruction(x_post_id: u64)]
+pub struct CreatePendingTip<'info> {
+    #[account(mut)]
+    pub delegate: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"spending_vault", spending_vault.owner.as_ref()],
+        bump = spending_vault.bump,
+    )]
+    pub spending_vault: Account<'info, SpendingVault>,
+
+    #[account(
+        init,
+        payer = delegate,
+        seeds = [b"pending_tip", spending_vault.key().as_ref(), &x_post_id.to_le_bytes()],
+        bump,
+        space = 8 + PendingTip::INIT_SPACE,
+    )]
+    pub pending_tip: Account<'info, PendingTip>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(x_post_id: u64)]
+pub struct ClaimPendingTip<'info> {
+    pub claim_authority: Signer<'info>,
+
+    pub recipient: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"jar", recipient.key().as_ref()],
+        bump = recipient_jar.bump,
+        constraint = recipient_jar.user == recipient.key() @ TipJarError::UnauthorizedRecipient,
+    )]
+    pub recipient_jar: Account<'info, DataAccount>,
+
+    #[account(
+        mut,
+        close = rent_refund,
+        seeds = [b"pending_tip", pending_tip.spending_vault.as_ref(), &x_post_id.to_le_bytes()],
+        bump = pending_tip.bump,
+        constraint = pending_tip.x_post_id == x_post_id @ TipJarError::InvalidPostId,
+        constraint = pending_tip.claim_authority == claim_authority.key() @ TipJarError::UnauthorizedClaimAuthority,
+    )]
+    pub pending_tip: Account<'info, PendingTip>,
+
+    /// CHECK: The address is stored in the pending tip and receives only reclaimed rent.
+    #[account(
+        mut,
+        constraint = pending_tip.rent_refund == rent_refund.key() @ TipJarError::InvalidRentRefund,
+    )]
+    pub rent_refund: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(x_post_id: u64)]
+pub struct RefundPendingTip<'info> {
+    #[account(mut)]
+    pub sender: Signer<'info>,
+
+    #[account(
+        mut,
+        close = rent_refund,
+        seeds = [b"pending_tip", pending_tip.spending_vault.as_ref(), &x_post_id.to_le_bytes()],
+        bump = pending_tip.bump,
+        constraint = pending_tip.x_post_id == x_post_id @ TipJarError::InvalidPostId,
+        constraint = pending_tip.sender == sender.key() @ TipJarError::UnauthorizedOwner,
+    )]
+    pub pending_tip: Account<'info, PendingTip>,
+
+    /// CHECK: The address is stored in the pending tip and receives only reclaimed rent.
+    #[account(
+        mut,
+        constraint = pending_tip.rent_refund == rent_refund.key() @ TipJarError::InvalidRentRefund,
+    )]
+    pub rent_refund: UncheckedAccount<'info>,
+}
+
 /// The original mainnet jar layout. Do not reorder or change these fields.
 #[account]
 #[derive(InitSpace)]
@@ -363,6 +561,21 @@ pub struct SpendingVault {
     pub last_processed_x_post_id: u64,
     pub bump: u8,
     pub paused: bool,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct PendingTip {
+    pub sender: Pubkey,
+    pub spending_vault: Pubkey,
+    pub claim_authority: Pubkey,
+    pub rent_refund: Pubkey,
+    pub recipient_x_user_id: u64,
+    pub x_post_id: u64,
+    pub amount: u64,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub bump: u8,
 }
 
 #[event]
@@ -405,6 +618,38 @@ pub struct DelegatedTipExecuted {
     pub executed_at: i64,
 }
 
+#[event]
+pub struct PendingTipCreated {
+    pub pending_tip: Pubkey,
+    pub vault: Pubkey,
+    pub sender: Pubkey,
+    pub recipient_x_user_id: u64,
+    pub x_post_id: u64,
+    pub amount: u64,
+    pub created_at: i64,
+    pub expires_at: i64,
+}
+
+#[event]
+pub struct PendingTipClaimed {
+    pub pending_tip: Pubkey,
+    pub recipient: Pubkey,
+    pub recipient_jar: Pubkey,
+    pub recipient_x_user_id: u64,
+    pub x_post_id: u64,
+    pub amount: u64,
+    pub claimed_at: i64,
+}
+
+#[event]
+pub struct PendingTipRefunded {
+    pub pending_tip: Pubkey,
+    pub sender: Pubkey,
+    pub x_post_id: u64,
+    pub amount: u64,
+    pub refunded_at: i64,
+}
+
 fn validate_policy(
     delegate: &Pubkey,
     max_tip_lamports: u64,
@@ -431,6 +676,18 @@ fn refresh_spending_window(vault: &mut SpendingVault, now: i64) {
         vault.window_started_at = now;
         vault.spent_in_window = 0;
     }
+}
+
+fn validate_pending_tip_expiration(expires_at: i64, now: i64) -> Result<()> {
+    require!(expires_at > now, TipJarError::InvalidExpiration);
+    let latest_expiration = now
+        .checked_add(MAX_PENDING_TIP_LIFETIME_SECONDS)
+        .ok_or(TipJarError::Overflow)?;
+    require!(
+        expires_at <= latest_expiration,
+        TipJarError::PendingTipLifetimeTooLong
+    );
+    Ok(())
 }
 
 fn authorize_spend(vault: &mut SpendingVault, x_post_id: u64, amount: u64, now: i64) -> Result<()> {
@@ -530,6 +787,20 @@ pub enum TipJarError {
     InvalidPostId,
     #[msg("This X post was already processed or arrived out of order.")]
     PostAlreadyProcessed,
+    #[msg("The recipient X user ID must be greater than zero.")]
+    InvalidXUserId,
+    #[msg("A pending tip cannot remain open for longer than 30 days.")]
+    PendingTipLifetimeTooLong,
+    #[msg("This pending tip has expired and can no longer be claimed.")]
+    PendingTipExpired,
+    #[msg("This pending tip has not expired and cannot be refunded yet.")]
+    PendingTipNotExpired,
+    #[msg("This signer cannot verify claims for the pending tip.")]
+    UnauthorizedClaimAuthority,
+    #[msg("The recipient wallet does not own the destination jar.")]
+    UnauthorizedRecipient,
+    #[msg("The rent-refund account does not match the pending tip.")]
+    InvalidRentRefund,
 }
 
 #[cfg(test)]
@@ -613,5 +884,19 @@ mod tests {
         assert!(authorize_spend(&mut vault, 101, 1, 1_101).is_err());
         assert!(authorize_spend(&mut vault, 100, 1, 1_102).is_err());
         assert!(authorize_spend(&mut vault, 102, 1, 1_103).is_ok());
+    }
+
+    #[test]
+    fn validates_pending_tip_lifetime() {
+        let now = 1_000;
+        assert!(validate_pending_tip_expiration(now + 1, now).is_ok());
+        assert!(
+            validate_pending_tip_expiration(now + MAX_PENDING_TIP_LIFETIME_SECONDS, now).is_ok()
+        );
+        assert!(validate_pending_tip_expiration(now, now).is_err());
+        assert!(
+            validate_pending_tip_expiration(now + MAX_PENDING_TIP_LIFETIME_SECONDS + 1, now)
+                .is_err()
+        );
     }
 }
