@@ -162,6 +162,8 @@ a { color: var(--brass-light); }
 .status-chip.paused { color: var(--brass-light); border-color: rgba(241, 202, 113, .24); }
 .status-chip.revoked { color: #f1a798; border-color: rgba(241, 117, 94, .24); }
 .quiet-link { display: block; margin: 16px auto 0; color: #7c8d83; font-size: 9px; text-align: center; text-underline-offset: 3px; }
+.wallet-help { max-width: 390px; margin: 14px auto 0; color: #73827a; font-size: 9px; line-height: 1.65; text-align: center; }
+.wallet-help a { color: #a9b8af; text-underline-offset: 3px; }
 
 @media (hover: hover) and (pointer: fine) {
   .btn-brass:hover:not(:disabled) { background: #f7d583; }

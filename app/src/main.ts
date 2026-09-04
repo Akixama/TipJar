@@ -10,7 +10,9 @@ import {
 // --- Phantom's injected provider (minimal shape we actually use) ----------
 interface PhantomProvider {
   isPhantom?: boolean;
-  connect(): Promise<{ publicKey: PublicKey }>;
+  connect(options?: {
+    onlyIfTrusted?: boolean;
+  }): Promise<{ publicKey: PublicKey }>;
   signMessage?(
     message: Uint8Array,
     display?: "utf8" | "hex"
@@ -264,14 +266,16 @@ const provider: PhantomProvider | null = window.solana?.isPhantom
   : null;
 let connectedPubkey: PublicKey | null = null;
 
-async function connectWallet(): Promise<PublicKey | null> {
+async function connectWallet(onlyIfTrusted = false): Promise<PublicKey | null> {
   if (!provider) {
     toast(
       'Phantom not found — <a href="https://phantom.app" target="_blank" rel="noopener">install it</a> and reload.'
     );
     return null;
   }
-  const resp = await provider.connect();
+  const resp = await provider.connect(
+    onlyIfTrusted ? { onlyIfTrusted: true } : undefined
+  );
   connectedPubkey = resp.publicKey;
   walletBox.classList.add("connected");
   walletBox.innerHTML = `<span></span>${short(connectedPubkey)}`;
@@ -718,6 +722,7 @@ async function runXSetupMode(): Promise<void> {
       <p>This pilot uses devnet SOL only. Nothing here can spend mainnet SOL.</p>
     </div>
     <button class="btn-brass btn-wide primary-action" id="connectBtn">Connect Phantom</button>
+    <p class="wallet-help">Already connected on TipJar? We’ll restore it automatically. Need a wallet? Create or import one inside <a href="https://phantom.app" target="_blank" rel="noopener">Phantom</a>—TipOnSol never sees your recovery phrase.</p>
     <a class="quiet-link" href="/">Back to my TipJar</a>
   `;
   $<HTMLButtonElement>("#connectBtn").onclick = async () => {
@@ -729,6 +734,16 @@ async function runXSetupMode(): Promise<void> {
       toast("Couldn't connect your wallet.");
     }
   };
+
+  if (provider) {
+    try {
+      const trustedOwner = await connectWallet(true);
+      if (trustedOwner) await renderXSetup(trustedOwner);
+    } catch {
+      // A silent reconnect is intentionally optional. The explicit button
+      // remains available if Phantom has not trusted this origin yet.
+    }
+  }
 }
 
 async function renderXSetup(owner: PublicKey): Promise<void> {
