@@ -6,7 +6,8 @@
     "test:x-auth": "node --test tests/x-auth.test.mjs"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.1.0"
+    "@neondatabase/serverless": "^1.1.0",
+    "bs58": "^6.0.0"
   },
   "devDependencies": {
     "@anchor-lang/core": "^1.1.2",

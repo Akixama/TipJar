@@ -7,6 +7,7 @@ import {
   oauthRedirectUri,
   readStateCookie,
   storeBotCredentials,
+  storeWalletLink,
   verifyOauthCookie,
 } from "../_lib/x-auth.mjs";
 
@@ -41,8 +42,22 @@ export default {
         code,
         verifier: cookie.verifier,
         redirectUri: oauthRedirectUri(request),
+        requireRefreshToken: cookie.purpose !== "link",
       });
       const identity = await fetchXIdentity(tokens.access_token);
+      if (cookie.purpose === "link" && typeof cookie.wallet === "string") {
+        await storeWalletLink(identity, cookie.wallet);
+        return htmlPage(
+          `@${identity.username} linked`,
+          "Your X identity is now securely linked to your Solana wallet. Return to finish your devnet spending vault.",
+          200,
+          responseHeaders,
+          "/?x=setup"
+        );
+      }
+      if (cookie.purpose !== "bot") {
+        throw new Error("Unknown OAuth authorization purpose");
+      }
       const expected = expectedBotUsername();
       if (identity.username.toLowerCase() !== expected.toLowerCase()) {
         return htmlPage(

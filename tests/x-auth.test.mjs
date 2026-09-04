@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
 import test from "node:test";
+import bs58 from "bs58";
 import {
   authorizationUrl,
   BOT_SCOPES,
@@ -8,6 +10,7 @@ import {
   encryptTokens,
   signOauthCookie,
   verifyOauthCookie,
+  verifyWalletSignature,
 } from "../api/_lib/x-auth.mjs";
 
 test("creates a PKCE verifier and S256 challenge", () => {
@@ -63,4 +66,16 @@ test("requests only the bot OAuth scopes and exact callback", () => {
     if (previousClientId === undefined) delete process.env.X_CLIENT_ID;
     else process.env.X_CLIENT_ID = previousClientId;
   }
+});
+
+test("verifies a Solana-compatible Ed25519 wallet signature", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const publicDer = publicKey.export({ format: "der", type: "spki" });
+  const wallet = bs58.encode(publicDer.subarray(publicDer.length - 32));
+  const message = "TipOnSol wallet verification";
+  const signature = sign(null, Buffer.from(message), privateKey).toString(
+    "base64"
+  );
+  assert.equal(verifyWalletSignature(wallet, message, signature), true);
+  assert.equal(verifyWalletSignature(wallet, `${message}!`, signature), false);
 });

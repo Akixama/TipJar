@@ -17,6 +17,7 @@ export default {
         redirectUri,
       });
       const cookie = signOauthCookie({
+        purpose: "bot",
         state: oauth.state,
         verifier: oauth.verifier,
         createdAt: Date.now(),
