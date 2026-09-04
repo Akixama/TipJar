@@ -107,7 +107,8 @@ npm run dev
 - [ ] Spending-vault and pending-tip frontend controls
 
 The staged design and security invariants for X tipping are documented in
-[`docs/x-tipping.md`](docs/x-tipping.md).
+[`docs/x-tipping.md`](docs/x-tipping.md). X OAuth and backend environment setup
+are documented in [`docs/x-backend.md`](docs/x-backend.md).
 
 ## License
 

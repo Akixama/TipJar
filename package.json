@@ -2,13 +2,15 @@
   "license": "ISC",
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "test:x-auth": "node --test tests/x-auth.test.mjs"
   },
   "dependencies": {
-    "@anchor-lang/core": "^1.0.1",
-    "@coral-xyz/anchor": "^0.32.1"
+    "@neondatabase/serverless": "^1.1.0"
   },
   "devDependencies": {
+    "@anchor-lang/core": "^1.1.2",
+    "@coral-xyz/anchor": "^0.32.1",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.0",
     "@types/mocha": "^9.0.0",
