@@ -69,11 +69,14 @@ for mainnet compatibility.
 # install deps
 yarn install
 
-# build the program
-anchor build
+# build the program without changing the existing mainnet program ID
+cargo build-sbf --manifest-path programs/pda/Cargo.toml
 
-# run tests (mainnet-cluster config — point Anchor.toml at devnet/localnet first if testing changes)
-anchor test
+# run policy tests
+cargo test -p pda --lib
+
+# run full local transactions against the built program in LiteSVM
+cargo test -p pda --test vault_transactions
 
 # run the frontend
 cd app
