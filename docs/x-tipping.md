@@ -88,3 +88,11 @@ daily limit because they consumed authorization when created.
 
 The existing `DataAccount` jar layout must not change during this work so jars
 created by the current mainnet program remain compatible.
+
+## Devnet deployment
+
+The staged X-tipping program is deployed separately on devnet at
+`CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P`. It uses the Cargo `devnet`
+feature so the default build continues to declare the existing mainnet program
+ID. The checked-in smoke test creates disposable actors and verifies a pending
+tip claim plus an expired sender refund against the live devnet program.

@@ -5,6 +5,7 @@ A shareable, on-chain tip jar for Solana creators. Generate a link, drop it anyw
 **Live:** https://x.com/Anjolaoluw_a/status/2076020582395879869?s=20
 **Demo:** https://x.com/Anjolaoluw_a/status/2076347839848862196?s=20
 **Program (mainnet):** [`37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A`](https://solscan.io/account/37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A)
+**Program (devnet):** [`CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P`](https://explorer.solana.com/address/CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P?cluster=devnet)
 
 ---
 
@@ -77,14 +78,20 @@ yarn install
 # build the program without changing the existing mainnet program ID
 cargo build-sbf --manifest-path programs/pda/Cargo.toml
 
+# build the isolated devnet program ID
+cargo build-sbf --manifest-path programs/pda/Cargo.toml --features devnet
+
 # run policy tests
 cargo test -p pda --lib
 
 # run full local transactions against the built program in LiteSVM
 cargo test -p pda --test vault_transactions
 
-# run the frontend
+# exercise pending-tip claim and refund against the deployed devnet program
 cd app
+npm run smoke:devnet -- /path/to/devnet-keypair.json
+
+# run the frontend
 npm install
 npm run dev
 ```

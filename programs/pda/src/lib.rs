@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{self, Transfer};
 
+#[cfg(not(feature = "devnet"))]
 declare_id!("37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A");
+#[cfg(feature = "devnet")]
+declare_id!("CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P");
 
 const DAY_SECONDS: i64 = 86_400;
 const MAX_PENDING_TIP_LIFETIME_SECONDS: i64 = 30 * DAY_SECONDS;

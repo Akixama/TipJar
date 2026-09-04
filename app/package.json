@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node node_modules/typescript/bin/tsc --noEmit false --rootDir src --outDir dist && node scripts/copy-static.mjs",
+    "smoke:devnet": "node scripts/devnet-smoke.mjs",
     "watch": "esbuild src/main.ts --format=esm --outfile=dist/main.js --watch",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "serve": "npx --yes serve ."

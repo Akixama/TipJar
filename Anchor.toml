@@ -8,8 +8,11 @@ skip-lint = false
 [programs.mainnet]
 pda = "37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A"
 
+[programs.devnet]
+pda = "CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P"
+
 [provider]
-cluster = "mainnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
