@@ -395,6 +395,71 @@ export async function botCredentialStatus() {
   return rows[0] ?? null;
 }
 
+export async function botCredentials() {
+  const sql = database();
+  await ensureCredentialsTable(sql);
+  const rows = await sql`
+    SELECT x_user_id, username, encrypted_tokens, scopes, updated_at
+    FROM x_bot_credentials
+    WHERE singleton_id = 1
+  `;
+  if (!rows[0]) throw new Error("The X bot is not connected");
+  return {
+    ...rows[0],
+    tokens: decryptTokens(rows[0].encrypted_tokens),
+  };
+}
+
+export async function refreshBotCredentials(credentials) {
+  const refreshToken = credentials.tokens?.refresh_token;
+  if (!refreshToken) throw new Error("The X bot refresh token is missing");
+  const response = await fetch("https://api.x.com/2/oauth2/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(
+        `${required("X_CLIENT_ID")}:${required("X_CLIENT_SECRET")}`
+      ).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: required("X_CLIENT_ID"),
+    }),
+  });
+  const body = await response.json();
+  if (!response.ok || !body.access_token) {
+    throw new Error(`X token refresh failed (${response.status})`);
+  }
+  const tokens = {
+    ...body,
+    refresh_token: body.refresh_token ?? refreshToken,
+  };
+  await storeBotCredentials(
+    { id: credentials.x_user_id, username: credentials.username },
+    tokens
+  );
+  return { ...credentials, tokens };
+}
+
+export async function walletLinkByXUserId(xUserId) {
+  if (typeof xUserId !== "string" || !/^\d+$/.test(xUserId)) {
+    throw new Error("Invalid X user ID");
+  }
+  const sql = database();
+  await ensureWalletLinkTables(sql);
+  const rows = await sql`
+    SELECT x_user_id, username, wallet_pubkey, linked_at, updated_at
+    FROM x_wallet_links
+    WHERE x_user_id = ${xUserId}
+  `;
+  return rows[0] ?? null;
+}
+
+export function xDatabase() {
+  return database();
+}
+
 export function expectedBotUsername() {
   return (process.env.X_BOT_USERNAME ?? "TippOnSol").replace(/^@/, "");
 }

@@ -3,10 +3,12 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "test:x-auth": "node --test tests/x-auth.test.mjs"
+    "test:x-auth": "node --test tests/x-auth.test.mjs",
+    "test:x-processor": "node --test tests/tip-command.test.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0"
   },
   "devDependencies": {

@@ -7,6 +7,9 @@
   "functions": {
     "api/rpc.mjs": {
       "maxDuration": 10
+    },
+    "api/x/process.mjs": {
+      "maxDuration": 60
     }
   },
   "headers": [

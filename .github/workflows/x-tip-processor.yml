@@ -1,0 +1,23 @@
+name: Process X tip commands
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: x-tip-processor
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Process new mentions
+        env:
+          PROCESSOR_SECRET: ${{ secrets.TIPONSOL_PROCESSOR_SECRET }}
+        run: |
+          curl --fail-with-body --retry 2 --max-time 70 \
+            -H "Authorization: Bearer ${PROCESSOR_SECRET}" \
+            https://tiponsol.com/api/x/process

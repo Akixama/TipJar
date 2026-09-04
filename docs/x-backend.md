@@ -19,6 +19,7 @@ environment variables for Preview and Production:
 | `DATABASE_URL`                 | Neon Postgres connection string supplied by the Vercel integration |
 | `TIPONSOL_DELEGATE_PUBLIC_KEY` | Public key of the devnet-only constrained bot signer               |
 | `TIPONSOL_DELEGATE_SECRET_KEY` | Encrypted Vercel secret for that generated devnet signer           |
+| `CRON_SECRET`                  | Random bearer secret protecting the mention processor endpoint     |
 
 Generate both application secrets independently and paste their output directly
 into Vercel, never into a chat or committed file:
@@ -63,3 +64,30 @@ as encrypted environment variables. It is funded solely with devnet SOL. The
 public key is exposed by `/api/x/config` so a wallet can create a spending vault
 whose on-chain policy names that delegate. The delegate cannot withdraw from a
 vault or bypass its per-tip, daily, pause, revocation, or expiry controls.
+
+## Mention processor
+
+`GET /api/x/process` polls the connected bot account's mention timeline. The
+endpoint requires `Authorization: Bearer <CRON_SECRET>` and is invoked every
+five minutes by `.github/workflows/x-tip-processor.yml`. The repository secret
+`TIPONSOL_PROCESSOR_SECRET` and Vercel's `CRON_SECRET` must contain the same
+random value.
+
+The first invocation establishes a cursor and intentionally skips historical
+mentions. Later invocations process posts oldest-first and accept either of
+these forms:
+
+```text
+@TippOnSol send 0.05 SOL to @recipient
+@TippOnSol send 0.05 SOL
+```
+
+The second form must be a reply to the recipient. Every recognized command is
+recorded by X post ID, concurrent processor runs use a database lease, and the
+Solana program independently rejects replayed or out-of-order post IDs. A
+recipient with a linked wallet and an initialized devnet jar is paid directly;
+otherwise the amount enters a seven-day pending-tip escrow.
+
+The processor refreshes the bot's OAuth token after an unauthorized response.
+It never logs or returns OAuth tokens, the delegate secret key, or the cron
+secret.
