@@ -309,8 +309,34 @@ async function sendIxs(
 
   const { signature } = await provider.signAndSendTransaction(tx);
   toast("Confirming transaction…", 15000);
-  await rpcConnection.confirmTransaction(signature, "confirmed");
+  await confirmSignatureOverHttp(rpcConnection, signature);
   return signature;
+}
+
+async function confirmSignatureOverHttp(
+  rpcConnection: Connection,
+  signature: string
+): Promise<void> {
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const response = await rpcConnection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = response.value[0];
+    if (status?.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+    }
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(
+    `Confirmation is taking longer than expected. Check signature ${signature} in Solana Explorer.`
+  );
 }
 
 async function sendIx(
