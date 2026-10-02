@@ -1,7 +1,6 @@
 const ALLOWED_METHODS = new Set([
   "getAccountInfo",
   "getLatestBlockhash",
-  "getMinimumBalanceForRentExemption",
   "getSignatureStatuses",
   "simulateTransaction",
 ]);
@@ -49,25 +48,20 @@ export default {
       return jsonError("Unsupported Solana RPC method", 400);
     }
 
-    const useDevnet = requestUrl.searchParams.get("cluster") === "devnet";
     const apiKey = process.env.HELIUS_API_KEY;
-    if (!useDevnet && !apiKey) {
+    if (!apiKey) {
       return jsonError("RPC service is not configured", 503);
     }
 
     try {
       const upstream = await fetch(
-        useDevnet
-          ? "https://api.devnet.solana.com"
-          : `https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(
-              apiKey
-            )}`,
+        `https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(apiKey)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           cache: "no-store",
-        }
+        },
       );
 
       return new Response(await upstream.text(), {

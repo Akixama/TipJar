@@ -1,15 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "npm ci --omit=dev && npm --prefix app ci",
+  "installCommand": "npm --prefix app ci",
   "buildCommand": "npm --prefix app run build",
   "outputDirectory": "app/dist",
   "functions": {
     "api/rpc.mjs": {
       "maxDuration": 10
-    },
-    "api/x/process.mjs": {
-      "maxDuration": 60
     }
   },
   "headers": [
@@ -17,14 +14,8 @@
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
-        }
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
       ]
     }
   ]

@@ -1860,9 +1860,6 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "litesvm",
- "solana-address 2.6.1",
- "solana-clock",
- "solana-instruction",
  "solana-keypair",
  "solana-message",
  "solana-signer",

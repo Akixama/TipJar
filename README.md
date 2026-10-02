@@ -5,7 +5,6 @@ A shareable, on-chain tip jar for Solana creators. Generate a link, drop it anyw
 **Live:** https://x.com/Anjolaoluw_a/status/2076020582395879869?s=20
 **Demo:** https://x.com/Anjolaoluw_a/status/2076347839848862196?s=20
 **Program (mainnet):** [`37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A`](https://solscan.io/account/37irAnJvqTH3tSzKf5xcj1fQsYwn8GQ4bpXdP8wnHT7A)
-**Program (devnet):** [`CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P`](https://explorer.solana.com/address/CV75mHHfR1yKnQTowW4TmW7yNTCpk7ET8GYBeu6Wfp5P?cluster=devnet)
 
 ---
 
@@ -24,24 +23,13 @@ The frontend talks to the program with **hand-built instruction discriminators**
 
 ## Program design
 
-The live mainnet deployment currently exposes the original three jar
-instructions. This branch preserves them and adds the spending-vault
-instructions that will be enabled only after devnet testing:
+Three instructions, one account type:
 
 | Instruction | Who can call | What it does |
 |---|---|---|
 | `initialize` | Anyone (for their own jar) | Creates the PDA, sets owner, zeroes counters |
 | `tip` | Anyone | Transfers SOL into the jar, increments `total_tipped` and `tip_count` |
 | `withdraw` | Jar owner only | Pulls SOL out, enforced to never dip below rent-exempt minimum |
-| `initialize_spending_vault` | Vault owner only | Creates an outgoing tip budget and its delegated policy |
-| `update_spending_policy` | Vault owner only | Changes the delegate, limits, expiry or pause state |
-| `deposit_to_spending_vault` | Vault owner only | Adds SOL to the outgoing tip budget |
-| `withdraw_from_spending_vault` | Vault owner only | Returns available vault SOL to its owner |
-| `revoke_spending_delegate` | Vault owner only | Immediately disables automated tipping |
-| `delegate_tip` | Configured delegate only | Sends a policy-compliant X tip to a registered jar |
-| `create_pending_tip` | Configured delegate only | Escrows a policy-compliant tip for an unregistered X user |
-| `claim_pending_tip` | Recipient + claim authority | Sends a verified recipient's pending tip into their jar |
-| `refund_pending_tip` | Original sender only | Recovers a pending tip after it expires |
 
 ```rust
 pub struct DataAccount {
@@ -53,14 +41,6 @@ pub struct DataAccount {
 ```
 
 Guardrails already in place: checked arithmetic on both counters (no silent overflow), a zero-amount guard on tips and withdrawals, and an owner constraint on withdraw enforced at the account level, not just in application logic.
-
-The new `SpendingVault` keeps its owner and delegate separate, enforces per-tip
-and rolling daily limits, expires authorization, supports immediate revocation,
-and rejects replayed or out-of-order X post IDs. Its SOL can be withdrawn only
-to the owner wallet. Pending tips use one escrow PDA per X post, require both
-the recipient wallet and the X-verification authority to claim, expire after at
-most 30 days, and can then be refunded only to the original sender. The
-existing `DataAccount` byte layout remains unchanged for mainnet compatibility.
 
 ## Tech stack
 
@@ -75,23 +55,14 @@ existing `DataAccount` byte layout remains unchanged for mainnet compatibility.
 # install deps
 yarn install
 
-# build the program without changing the existing mainnet program ID
-cargo build-sbf --manifest-path programs/pda/Cargo.toml
+# build the program
+anchor build
 
-# build the isolated devnet program ID
-cargo build-sbf --manifest-path programs/pda/Cargo.toml --features devnet
-
-# run policy tests
-cargo test -p pda --lib
-
-# run full local transactions against the built program in LiteSVM
-cargo test -p pda --test vault_transactions
-
-# exercise pending-tip claim and refund against the deployed devnet program
-cd app
-npm run smoke:devnet -- /path/to/devnet-keypair.json
+# run tests (mainnet-cluster config — point Anchor.toml at devnet/localnet first if testing changes)
+anchor test
 
 # run the frontend
+cd app
 npm install
 npm run dev
 ```
@@ -101,14 +72,6 @@ npm run dev
 - [ ] Tip messages / notes attached to a transaction
 - [ ] Leaderboard of top tippers per jar
 - [ ] Devnet deployment + toggle for testing without real SOL
-- [x] Non-custodial X tipping program through owner-funded spending vaults
-- [x] Expiring pending-tip escrow program for recipients who have not registered
-- [ ] X OAuth account linking and command-processing backend
-- [ ] Spending-vault and pending-tip frontend controls
-
-The staged design and security invariants for X tipping are documented in
-[`docs/x-tipping.md`](docs/x-tipping.md). X OAuth and backend environment setup
-are documented in [`docs/x-backend.md`](docs/x-backend.md).
 
 ## License
 
